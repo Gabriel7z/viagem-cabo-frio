@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Mapa · Arraial, Cabo Frio e Búzios</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --ink: #1c1916;
+      --muted: #6b635a;
+      --card: #fffdf9;
+      --line: #e4d9cc;
+      --cf: #0f6b5c;
+      --ar: #1d4e89;
+      --bz: #b45309;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; font-family: "Segoe UI", system-ui, sans-serif; color: var(--ink); }
+    header {
+      position: absolute;
+      z-index: 1000;
+      left: 12px;
+      right: 12px;
+      top: 12px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px 14px 10px;
+    }
+    header h1 { margin: 0; font-size: 1.05rem; letter-spacing: -0.03em; }
+    header p { margin: 4px 0 10px; color: var(--muted); font-size: 0.8rem; }
+    .nav { display: flex; gap: 10px; font-size: 0.8rem; margin-bottom: 8px; }
+    .nav a { color: var(--cf); }
+    .filters { display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .filters button {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 99px;
+      padding: 6px 12px;
+      font-size: 0.78rem;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .filters button.on { color: #fff; }
+    .filters button[data-city="all"].on { background: var(--ink); }
+    .filters button[data-city="Cabo Frio"].on { background: var(--cf); }
+    .filters button[data-city="Arraial"].on { background: var(--ar); }
+    .filters button[data-city="Búzios"].on { background: var(--bz); }
+    #map { height: 100%; }
+    .legend {
+      position: absolute;
+      z-index: 1000;
+      left: 12px;
+      bottom: 24px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px 12px;
+      font-size: 0.75rem;
+    }
+    .legend span { display: inline-block; width: 8px; height: 8px; border-radius: 99px; margin-right: 6px; }
+    .leaflet-popup-content-wrapper { border-radius: 12px; }
+    .popup h3 { margin: 0 0 4px; font-size: 1rem; }
+    .popup .city { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 6px; }
+    .popup p { margin: 0 0 8px; font-size: 0.85rem; color: var(--muted); }
+    .popup a { font-size: 0.8rem; color: var(--cf); }
+    .dot {
+      width: 14px; height: 14px; border-radius: 99px;
+      border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.25);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="nav">
+      <a href="./">Viagem</a>
+      <span class="muted">Mapa das atrações</span>
+    </div>
+    <h1>Arraial, Cabo Frio e Búzios</h1>
+    <p>Praias, mirantes e pontos clássicos. A estrela é a Vila Appia. Toque no pino para o jeito de chegar.</p>
+    <div class="filters">
+      <button class="on" data-city="all">Todas</button>
+      <button data-city="Cabo Frio">Cabo Frio</button>
+      <button data-city="Arraial">Arraial</button>
+      <button data-city="Búzios">Búzios</button>
+    </div>
+  </header>
+  <div id="map"></div>
+  <div class="legend">
+    <div><span style="background:#0f6b5c"></span>Cabo Frio</div>
+    <div><span style="background:#1d4e89"></span>Arraial do Cabo</div>
+    <div><span style="background:#b45309"></span>Búzios</div>
+  </div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const colors = { "Cabo Frio": "#0f6b5c", "Arraial": "#1d4e89", "Búzios": "#b45309" };
+    const spots = [
+      { name: "Pousada Vila Appia", city: "Cabo Frio", lat: -22.8796, lng: -42.0192, hotel: true, tip: "Nossa base. Rua Raul Veiga, 558. ~10 min a pé da Praia do Forte." },
+      { name: "Praia do Forte", city: "Cabo Frio", lat: -22.8775, lng: -41.9972, tip: "Praia urbana, a pé da pousada. Palmeiras, quiosques e canal." },
+      { name: "Forte de São Mateus", city: "Cabo Frio", lat: -22.8763, lng: -41.9958, tip: "Forte do séc. XVII no canto da Praia do Forte. Pôr do sol." },
+      { name: "Prainha", city: "Cabo Frio", lat: -22.8752, lng: -42.0014, tip: "Faixa curta ao lado do Forte. Água mais calma." },
+      { name: "Morro da Guia", city: "Cabo Frio", lat: -22.8888, lng: -42.0048, tip: "Trilha curta e vista de 360°. 15–20 min da pousada." },
+      { name: "Canal do Itajuru / Boulevard", city: "Cabo Frio", lat: -22.8792, lng: -42.0172, tip: "Orla do canal, restaurantes. A pé do centro." },
+      { name: "Rua dos Biquínis", city: "Cabo Frio", lat: -22.8807, lng: -42.0186, tip: "Compras no centro. 3 min da pousada." },
+      { name: "Igreja N. Sra. da Assunção", city: "Cabo Frio", lat: -22.8799, lng: -42.0178, tip: "Igreja histórica no centro." },
+      { name: "Praia das Dunas", city: "Cabo Frio", lat: -22.8908, lng: -42.0095, tip: "Areia larga e dunas. 10 min de carro ou ônibus." },
+      { name: "Praia do Foguete", city: "Cabo Frio", lat: -22.9115, lng: -42.0362, tip: "Mar aberto, surf. ~15 min de carro rumo a Arraial." },
+      { name: "Praia do Peró", city: "Cabo Frio", lat: -22.8410, lng: -41.9868, tip: "Praia longa, boa para caminhar. ~20 min de carro." },
+      { name: "Praia das Conchas", city: "Cabo Frio", lat: -22.8678, lng: -41.9785, tip: "Mais quieta, rumo ao Peró." },
+      { name: "Ilha do Japonês", city: "Cabo Frio", lat: -22.8738, lng: -41.9838, tip: "Banco de areia na maré baixa. Barco ou caminhada pela passagem, conforme a maré." },
+      { name: "Passagem (Arraial × Cabo Frio)", city: "Cabo Frio", lat: -22.8965, lng: -42.0238, tip: "Lagoa de Araruama encontra o mar. No caminho para Arraial." },
+
+      { name: "Praia dos Anjos", city: "Arraial", lat: -22.9733, lng: -42.0200, tip: "Centro de Arraial. Daqui saem os barcos e a trilha do Forno." },
+      { name: "Porto dos Anjos", city: "Arraial", lat: -22.9746, lng: -42.0182, tip: "Embarque do passeio de barco (Gruta Azul, Farol, Pontal)." },
+      { name: "Praia do Forno", city: "Arraial", lat: -22.9661, lng: -42.0144, tip: "Água verde. Trilha fácil de ~15 min a partir dos Anjos, ou barco-táxi." },
+      { name: "Praia Grande", city: "Arraial", lat: -22.9678, lng: -42.0270, tip: "Orla longa da cidade. Estrutura e quiosques." },
+      { name: "Prainha (Arraial)", city: "Arraial", lat: -22.9706, lng: -42.0238, tip: "Entre Anjos e Praia Grande. Boa para banho." },
+      { name: "Pontal do Atalaia", city: "Arraial", lat: -22.9992, lng: -42.0064, tip: "Cartão-postal. Escadaria longa; as prainhas ficam embaixo." },
+      { name: "Escadaria do Pontal", city: "Arraial", lat: -22.9986, lng: -42.0076, tip: "Mais de 250 degraus até as Prainhas do Pontal." },
+      { name: "Gruta do Amor", city: "Arraial", lat: -23.0012, lng: -42.0054, tip: "Arco de pedra para foto. Nas Prainhas do Pontal." },
+      { name: "Praia Brava (Arraial)", city: "Arraial", lat: -22.9915, lng: -42.0118, tip: "Mar mais agitado, perto do Pontal." },
+      { name: "Gruta Azul", city: "Arraial", lat: -22.9828, lng: -42.0131, tip: "Só de barco. A luz azul aparece com sol e maré certa." },
+      { name: "Ilha / Praia do Farol", city: "Arraial", lat: -22.9978, lng: -41.9925, tip: "Ilha de Cabo Frio. Passeio de barco; às vezes o desembarque é restrito." },
+      { name: "Pedra do Macaco", city: "Arraial", lat: -22.9958, lng: -42.0095, tip: "Mirante no Pontal. Trilha curta." },
+      { name: "Mirante do Atalaia", city: "Arraial", lat: -22.9970, lng: -42.0088, tip: "Vista das prainhas e da ilha. Subida de carro até o bairro Atalaia." },
+
+      { name: "Rua das Pedras", city: "Búzios", lat: -22.7469, lng: -41.8819, tip: "Calçadão, bares e lojas. Melhor no fim da tarde / noite." },
+      { name: "Orla Bardot", city: "Búzios", lat: -22.7476, lng: -41.8788, tip: "Caminhada à beira-mar até a estátua da Brigitte Bardot." },
+      { name: "Estátua da Brigitte Bardot", city: "Búzios", lat: -22.7479, lng: -41.8769, tip: "No fim da Orla Bardot. Ponto de foto." },
+      { name: "Igreja de Sant'Ana", city: "Búzios", lat: -22.7461, lng: -41.8826, tip: "Igrejinha no alto, vista da Armação." },
+      { name: "Praia da Armação", city: "Búzios", lat: -22.7486, lng: -41.8796, tip: "Em frente à Orla Bardot. Centro da península." },
+      { name: "Praia dos Ossos", city: "Búzios", lat: -22.7464, lng: -41.8815, tip: "Vilarejo de pescadores, barcos. A pé da Rua das Pedras." },
+      { name: "Praia da Azeda", city: "Búzios", lat: -22.7438, lng: -41.8769, tip: "Água clara. Trilha a partir dos Ossos ou barco-táxi." },
+      { name: "Praia da Azedinha", city: "Búzios", lat: -22.7430, lng: -41.8752, tip: "Irmã menor da Azeda. Mesmo acesso." },
+      { name: "Praia João Fernandes", city: "Búzios", lat: -22.7418, lng: -41.8719, tip: "Quiosques na areia. Carro, ônibus local ou barco." },
+      { name: "Praia João Fernandinho", city: "Búzios", lat: -22.7410, lng: -41.8724, tip: "Ao lado de João Fernandes, mais intimista." },
+      { name: "Praia da Ferradura", city: "Búzios", lat: -22.7642, lng: -41.8898, tip: "Enseada em forma de ferradura, mar calmo." },
+      { name: "Praia da Ferradurinha", city: "Búzios", lat: -22.7706, lng: -41.8872, tip: "Pequena, água transparente. Perto da Ferradura." },
+      { name: "Praia de Geribá", city: "Búzios", lat: -22.7782, lng: -41.9122, tip: "A mais famosa. Surf, quiosques, dia inteiro." },
+      { name: "Praia da Tartaruga", city: "Búzios", lat: -22.7556, lng: -41.8874, tip: "Famílias e água mansa. Fácil de chegar de carro." },
+      { name: "Praia Brava (Búzios)", city: "Búzios", lat: -22.7386, lng: -41.8780, tip: "Mar aberto, ondas. Menos estrutura." },
+      { name: "Praia do Forno (Búzios)", city: "Búzios", lat: -22.7522, lng: -41.8704, tip: "Enseada pequena, acesso por trilha ou barco." },
+      { name: "Praia de Tucuns", city: "Búzios", lat: -22.7905, lng: -41.9255, tip: "Longa e menos cheia. ~15 min do centro." },
+      { name: "Praia de Manguinhos", city: "Búzios", lat: -22.7582, lng: -41.9184, tip: "Lado da lagoa / vento. Kitesurf." },
+      { name: "Porto da Barra", city: "Búzios", lat: -22.7604, lng: -41.8852, tip: "Embarque de escunas e passeios pela península." },
+      { name: "Olho de Boi", city: "Búzios", lat: -22.7356, lng: -41.8761, tip: "Praia de naturismo. Trilha a partir da Brava." },
+      { name: "Mirante do Pai Vitório", city: "Búzios", lat: -22.7348, lng: -41.8948, tip: "Vista da península. Melhor de carro ou bike." }
+    ];
+
+    const map = L.map("map", { zoomControl: true }).setView([-22.86, -41.98], 11);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap",
+      maxZoom: 18
+    }).addTo(map);
+
+    const layers = [];
+    function iconFor(spot) {
+      if (spot.hotel) {
+        return L.divIcon({
+          className: "",
+          html: '<div style="font-size:22px;line-height:22px">★</div>',
+          iconSize: [22, 22],
+          iconAnchor: [11, 11]
+        });
+      }
+      const c = colors[spot.city];
+      return L.divIcon({
+        className: "",
+        html: '<div class="dot" style="background:' + c + '"></div>',
+        iconSize: [14, 14],
+        iconAnchor: [7, 7]
+      });
+    }
+
+    function popup(spot) {
+      const maps = "https://www.google.com/maps/search/?api=1&query=" + spot.lat + "," + spot.lng;
+      return (
+        '<div class="popup"><div class="city" style="color:' + colors[spot.city] + '">' + spot.city +
+        '</div><h3>' + spot.name + '</h3><p>' + spot.tip +
+        '</p><a href="' + maps + '" target="_blank" rel="noopener">Abrir no Google Maps</a></div>'
+      );
+    }
+
+    spots.forEach(function (spot) {
+      const m = L.marker([spot.lat, spot.lng], { icon: iconFor(spot), title: spot.name })
+        .bindPopup(popup(spot));
+      m.addTo(map);
+      layers.push({ spot: spot, marker: m });
+    });
+
+    document.querySelectorAll(".filters button").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        document.querySelectorAll(".filters button").forEach(function (b) { b.classList.remove("on"); });
+        btn.classList.add("on");
+        const city = btn.getAttribute("data-city");
+        const shown = [];
+        layers.forEach(function (item) {
+          const keep = city === "all" || item.spot.city === city;
+          if (keep) {
+            if (!map.hasLayer(item.marker)) item.marker.addTo(map);
+            shown.push(item.marker.getLatLng());
+          } else if (map.hasLayer(item.marker)) {
+            map.removeLayer(item.marker);
+          }
+        });
+        if (shown.length) map.fitBounds(L.latLngBounds(shown), { padding: [80, 80], maxZoom: 13 });
+      });
+    });
+  </script>
+</body>
+</html>
